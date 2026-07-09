@@ -1,0 +1,140 @@
+{
+ "generated_at": "2026-07-09 23:42",
+ "trade_date": "20260709",
+ "params": {
+  "week_window": 5,
+  "sell_streak_min": 3,
+  "top_n": 10
+ },
+ "condition1": {
+  "matched": [],
+  "top10": [
+   {
+    "code": "2409",
+    "name": "友達",
+    "weekly_net_lots": 136621,
+    "buy_streak": 1,
+    "sell_streak": 1,
+    "flip": false,
+    "turn": null,
+    "weekly_closes": [],
+    "turn_desc": ""
+   },
+   {
+    "code": "2887",
+    "name": "台新新光金",
+    "weekly_net_lots": 83647,
+    "buy_streak": 4,
+    "sell_streak": 3,
+    "flip": true,
+    "turn": false,
+    "weekly_closes": [
+     28.6,
+     30.2,
+     32.45,
+     31.9,
+     34.15,
+     36.85
+    ],
+    "turn_desc": "上上週31.9 → 上週34.15 → 本週36.85"
+   },
+   {
+    "code": "2883",
+    "name": "凱基金",
+    "weekly_net_lots": 80173,
+    "buy_streak": 0,
+    "sell_streak": 1,
+    "flip": false,
+    "turn": null,
+    "weekly_closes": [],
+    "turn_desc": ""
+   },
+   {
+    "code": "2882",
+    "name": "國泰金",
+    "weekly_net_lots": 68408,
+    "buy_streak": 0,
+    "sell_streak": 1,
+    "flip": false,
+    "turn": null,
+    "weekly_closes": [],
+    "turn_desc": ""
+   },
+   {
+    "code": "1314",
+    "name": "中石化",
+    "weekly_net_lots": 55137,
+    "buy_streak": 0,
+    "sell_streak": 1,
+    "flip": false,
+    "turn": null,
+    "weekly_closes": [],
+    "turn_desc": ""
+   },
+   {
+    "code": "2884",
+    "name": "玉山金",
+    "weekly_net_lots": 47793,
+    "buy_streak": 4,
+    "sell_streak": 1,
+    "flip": false,
+    "turn": null,
+    "weekly_closes": [],
+    "turn_desc": ""
+   },
+   {
+    "code": "2324",
+    "name": "仁寶",
+    "weekly_net_lots": 46381,
+    "buy_streak": 5,
+    "sell_streak": 1,
+    "flip": false,
+    "turn": null,
+    "weekly_closes": [],
+    "turn_desc": ""
+   },
+   {
+    "code": "2881",
+    "name": "富邦金",
+    "weekly_net_lots": 44425,
+    "buy_streak": 0,
+    "sell_streak": 1,
+    "flip": false,
+    "turn": null,
+    "weekly_closes": [],
+    "turn_desc": ""
+   },
+   {
+    "code": "2105",
+    "name": "正新",
+    "weekly_net_lots": 42700,
+    "buy_streak": 6,
+    "sell_streak": 1,
+    "flip": false,
+    "turn": null,
+    "weekly_closes": [],
+    "turn_desc": ""
+   },
+   {
+    "code": "2353",
+    "name": "宏碁",
+    "weekly_net_lots": 36164,
+    "buy_streak": 9,
+    "sell_streak": 1,
+    "flip": false,
+    "turn": null,
+    "weekly_closes": [],
+    "turn_desc": ""
+   }
+  ],
+  "error": null
+ },
+ "condition2": {
+  "matched": [],
+  "status": {
+   "source": "unavailable",
+   "count": 0
+  },
+  "error": "無法取得 00991A 持股資料。請設定 PCF_URL 變數或提供 data/manual_holdings.csv（見 README）"
+ }
+}
