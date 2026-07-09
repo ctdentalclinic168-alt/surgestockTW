@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>盤後籌碼訊號｜外資轉買 × 00991A 加碼</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#101623">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="籌碼訊號">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;700&family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#101623; --panel:#18202f; --line:#2a3447;
+  --ink:#dfe6f2; --muted:#8b96ab;
+  --up:#ff6b6e; --down:#45c48a; --gold:#e8b04b;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);
+  font-family:"Noto Sans TC",sans-serif;font-size:15px;line-height:1.6;
+  padding:0 16px 64px}
+.mono{font-family:"IBM Plex Mono",monospace}
+.wrap{max-width:860px;margin:0 auto}
+
+/* ---- masthead ---- */
+header{padding:34px 0 20px;border-bottom:1px solid var(--line)}
+.kicker{font-size:12px;letter-spacing:.35em;color:var(--gold);margin-bottom:8px}
+h1{font-family:"Noto Serif TC",serif;font-weight:700;font-size:clamp(24px,4.6vw,34px);
+  letter-spacing:.04em}
+.meta{margin-top:10px;color:var(--muted);font-size:13px;display:flex;gap:18px;flex-wrap:wrap}
+.meta b{color:var(--ink);font-weight:500}
+
+/* ---- section ---- */
+section{margin-top:34px}
+.sec-head{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}
+.sec-no{font-family:"IBM Plex Mono",monospace;color:var(--gold);font-size:13px}
+h2{font-family:"Noto Serif TC",serif;font-size:20px;font-weight:600}
+.sec-desc{color:var(--muted);font-size:13px;margin-bottom:14px}
+
+/* ---- card list ---- */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.row{display:grid;grid-template-columns:minmax(110px,1.2fr) 120px 1fr auto;
+  gap:14px;align-items:center;padding:14px 16px;border-top:1px solid var(--line)}
+.row:first-child{border-top:none}
+.stock .code{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--muted)}
+.stock .name{font-weight:700;font-size:16px}
+.figs{font-size:12.5px;color:var(--muted)}
+.figs b{color:var(--ink);font-weight:500}
+.figs .up{color:var(--up)}
+.badge{font-size:11.5px;padding:3px 9px;border-radius:99px;white-space:nowrap;
+  border:1px solid var(--gold);color:var(--gold)}
+.badge.new{border-color:var(--up);color:var(--up)}
+svg.spark{display:block}
+.empty{padding:26px 18px;color:var(--muted);font-size:14px}
+
+/* ---- 檢核表 ---- */
+details{margin-top:12px}
+summary{cursor:pointer;color:var(--muted);font-size:13px;user-select:none}
+summary:hover{color:var(--ink)}
+table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:500;font-size:12px}
+th:first-child,td:first-child{text-align:left}
+td.ok{color:var(--gold)} td.no{color:var(--muted)}
+
+footer{margin-top:44px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);
+  padding-top:16px;line-height:1.8}
+@media(max-width:620px){
+  .row{grid-template-columns:1fr auto;grid-template-areas:"stock spark" "figs figs" "badge badge"}
+  .stock{grid-area:stock}.spark-cell{grid-area:spark}.figs{grid-area:figs}
+  .badge-cell{grid-area:badge;justify-self:start}
+}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="kicker">盤 後 籌 碼 訊 號</div>
+  <h1>外資轉買 × 00991A 加碼日報</h1>
+  <div class="meta">
+    <span>資料日 <b id="trade-date" class="mono">—</b></span>
+    <span>更新於 <b id="gen-time" class="mono">—</b></span>
+    <span>每晚 20:05 自動更新</span>
+  </div>
+</header>
+
+<section>
+  <div class="sec-head"><span class="sec-no">01</span><h2>外資轉買・週線翻揚</h2></div>
+  <div class="sec-desc">近 5 個交易日外資買超前 10 名，且先前連續賣超 ≥ 3 日後轉為買超，且週線由下轉彎向上</div>
+  <div class="card" id="list1"><div class="empty">載入中…</div></div>
+  <details id="raw-wrap" hidden>
+    <summary>查看週買超前 10 名完整檢核</summary>
+    <table id="raw-table"></table>
+  </details>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-no">02</span><h2>00991A 加碼・週線翻揚</h2></div>
+  <div class="sec-desc">主動復華未來 50（00991A）較前一交易日增加持股的個股，且週線由下轉彎向上</div>
+  <div class="card" id="list2"><div class="empty">載入中…</div></div>
+  <div class="sec-desc" id="c2-status" style="margin-top:10px"></div>
+</section>
+
+<footer>
+  週線翻揚定義：本週收盤 &gt; 上週收盤，且上週收盤 ≤ 上上週收盤（V 轉）。<br>
+  資料來源：臺灣證券交易所 T86／STOCK_DAY、復華投信公開持股資訊。本頁為個人研究工具，非投資建議。
+</footer>
+</div>
+
+<script>
+const fmt = n => n==null ? "—" : n.toLocaleString("zh-Hant");
+
+function spark(closes){
+  if(!closes || closes.length<2) return "";
+  const w=110,h=34,p=3;
+  const min=Math.min(...closes), max=Math.max(...closes), span=(max-min)||1;
+  const pts=closes.map((c,i)=>{
+    const x=p+i*(w-2*p)/(closes.length-1);
+    const y=h-p-(c-min)/span*(h-2*p);
+    return [x,y];
+  });
+  const path=pts.map((pt,i)=>(i?"L":"M")+pt[0].toFixed(1)+" "+pt[1].toFixed(1)).join(" ");
+  const a=pts[pts.length-2], b=pts[pts.length-1];
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">
+    <path d="${path}" fill="none" stroke="#8b96ab" stroke-width="1.6"/>
+    <path d="M${a[0].toFixed(1)} ${a[1].toFixed(1)} L${b[0].toFixed(1)} ${b[1].toFixed(1)}"
+      fill="none" stroke="#ff6b6e" stroke-width="2.4" stroke-linecap="round"/>
+    <circle cx="${b[0].toFixed(1)}" cy="${b[1].toFixed(1)}" r="2.6" fill="#ff6b6e"/>
+  </svg>`;
+}
+
+function rowHTML(s, figsHTML, badgeHTML){
+  return `<div class="row">
+    <div class="stock"><div class="code mono">${s.code}</div><div class="name">${s.name||""}</div></div>
+    <div class="spark-cell">${spark(s.weekly_closes)}</div>
+    <div class="figs">${figsHTML}<br><span class="mono" style="font-size:11.5px">${s.turn_desc||""}</span></div>
+    <div class="badge-cell">${badgeHTML}</div>
+  </div>`;
+}
+
+fetch("data/latest.json?t="+Date.now()).then(r=>r.json()).then(d=>{
+  document.getElementById("trade-date").textContent =
+    d.trade_date ? d.trade_date.replace(/(\d{4})(\d{2})(\d{2})/,"$1/$2/$3") : "—";
+  document.getElementById("gen-time").textContent = d.generated_at||"—";
+
+  /* 條件一 */
+  const c1=d.condition1, el1=document.getElementById("list1");
+  if(c1.error){ el1.innerHTML=`<div class="empty">${c1.error}</div>`; }
+  else if(!c1.matched.length){ el1.innerHTML=`<div class="empty">今日無符合全部條件的個股</div>`; }
+  else{
+    el1.innerHTML=c1.matched.map(s=>rowHTML(s,
+      `週買超 <b class="up">${fmt(s.weekly_net_lots)}</b> 張・連賣 <b>${s.sell_streak}</b> 日 → 連買 <b class="up">${s.buy_streak}</b> 日`,
+      `<span class="badge">符合三條件</span>`)).join("");
+  }
+  /* 前十名檢核表 */
+  if(c1.top10 && c1.top10.length){
+    document.getElementById("raw-wrap").hidden=false;
+    document.getElementById("raw-table").innerHTML =
+      `<tr><th>個股</th><th>週買超(張)</th><th>賣轉買</th><th>週線翻揚</th></tr>`+
+      c1.top10.map(s=>`<tr>
+        <td>${s.code} ${s.name||""}</td>
+        <td class="mono">${fmt(s.weekly_net_lots)}</td>
+        <td class="${s.flip?'ok':'no'}">${s.flip?`✓ 賣${s.sell_streak}買${s.buy_streak}`:'—'}</td>
+        <td class="${s.turn?'ok':'no'}">${s.turn===null?'未檢':(s.turn?'✓':'✗')}</td>
+      </tr>`).join("");
+  }
+
+  /* 條件二 */
+  const c2=d.condition2, el2=document.getElementById("list2");
+  if(c2.error){ el2.innerHTML=`<div class="empty">${c2.error}</div>`; }
+  else if(!c2.matched.length){ el2.innerHTML=`<div class="empty">今日 00991A 加碼股中，無週線翻揚者</div>`; }
+  else{
+    el2.innerHTML=c2.matched.map(s=>rowHTML(s,
+      `加碼 <b class="up">${fmt(s.add_lots)}</b> 張（${fmt(s.prev_lots)} → ${fmt(s.now_lots)}）`,
+      s.is_new?`<span class="badge new">新進場</span>`:`<span class="badge">加碼</span>`)).join("");
+  }
+  if(c2.status){
+    const st=[];
+    if(c2.status.count) st.push(`持股 ${c2.status.count} 檔（來源：${c2.status.source}）`);
+    if(c2.status.compare_with) st.push(`比對基準：${c2.status.compare_with}`);
+    document.getElementById("c2-status").textContent=st.join("・");
+  }
+}).catch(()=>{
+  document.getElementById("list1").innerHTML=
+  document.getElementById("list2").innerHTML=
+    `<div class="empty">尚無資料。請先在 GitHub Actions 手動執行一次 daily-update。</div>`;
+});
+
+/* PWA：註冊 service worker（相對路徑，GitHub Pages 子路徑也適用）*/
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("sw.js");
+}
+</script>
+</body>
+</html>

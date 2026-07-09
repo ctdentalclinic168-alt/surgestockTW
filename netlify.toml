@@ -1,0 +1,10 @@
+# Netlify 部署設定：純靜態網站，不需要 build
+[build]
+  publish = "."
+  command = "echo 'static site, no build'"
+
+# data/latest.json 不要被 CDN 快取太久，確保每晚更新後立即生效
+[[headers]]
+  for = "/data/*"
+  [headers.values]
+    Cache-Control = "public, max-age=300, must-revalidate"

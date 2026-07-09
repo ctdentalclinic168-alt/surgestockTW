@@ -1,0 +1,14 @@
+{
+  "name": "盤後籌碼訊號日報",
+  "short_name": "籌碼訊號",
+  "description": "外資轉買 × 00991A 加碼，每晚 20:05 自動更新",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#101623",
+  "theme_color": "#101623",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
