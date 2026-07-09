@@ -21,6 +21,7 @@ jobs:
       - name: daily update
         env:
           PCF_URL: ${{ vars.PCF_URL }}
+          ALLIANZ_PCF_URL: ${{ vars.ALLIANZ_PCF_URL }}
         run: python scripts/update.py
 
       - name: commit results
