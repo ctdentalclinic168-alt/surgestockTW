@@ -98,12 +98,7 @@ footer{margin-top:44px;color:var(--muted);font-size:12px;border-top:1px solid va
   </details>
 </section>
 
-<section>
-  <div class="sec-head"><span class="sec-no">02</span><h2>00991A 加碼・週線翻揚</h2></div>
-  <div class="sec-desc">主動復華未來 50（00991A）較前一交易日增加持股的個股，且週線由下轉彎向上</div>
-  <div class="card" id="list2"><div class="empty">載入中…</div></div>
-  <div class="sec-desc" id="c2-status" style="margin-top:10px"></div>
-</section>
+<div id="funds"></div>
 
 <footer>
   週線翻揚定義：本週收盤 &gt; 上週收盤，且上週收盤 ≤ 上上週收盤（V 轉）。<br>
@@ -169,21 +164,34 @@ fetch("data/latest.json?t="+Date.now()).then(r=>r.json()).then(d=>{
       </tr>`).join("");
   }
 
-  /* 條件二 */
-  const c2=d.condition2, el2=document.getElementById("list2");
-  if(c2.error){ el2.innerHTML=`<div class="empty">${c2.error}</div>`; }
-  else if(!c2.matched.length){ el2.innerHTML=`<div class="empty">今日 00991A 加碼股中，無週線翻揚者</div>`; }
-  else{
-    el2.innerHTML=c2.matched.map(s=>rowHTML(s,
-      `加碼 <b class="up">${fmt(s.add_lots)}</b> 張（${fmt(s.prev_lots)} → ${fmt(s.now_lots)}）`,
-      s.is_new?`<span class="badge new">新進場</span>`:`<span class="badge">加碼</span>`)).join("");
-  }
-  if(c2.status){
+  /* 主動式ETF加碼（每檔基金一個區塊） */
+  const fdate = s => s ? s.replace(/(\d{4})(\d{2})(\d{2})/,"$1/$2/$3") : s;
+  const wrap=document.getElementById("funds");
+  (d.funds||[]).forEach((f,i)=>{
+    const no=String(i+2).padStart(2,"0");
+    let body;
+    if(f.error){ body=`<div class="empty">${f.error}</div>`; }
+    else if(!f.matched.length){ body=`<div class="empty">今日 ${f.id} 加碼股中，無週線翻揚者</div>`; }
+    else{
+      body=f.matched.map(s=>rowHTML(s,
+        s.is_new
+          ? `新進場 <b class="up">${fmt(s.now_shares)}</b> ${f.unit}`
+          : `加碼 <b class="up">+${s.add_pct}%</b>（${fmt(s.prev_shares)} → ${fmt(s.now_shares)} ${f.unit}）`,
+        s.is_new?`<span class="badge new">新進場</span>`:`<span class="badge">加碼</span>`)).join("");
+    }
     const st=[];
-    if(c2.status.count) st.push(`持股 ${c2.status.count} 檔（來源：${c2.status.source}）`);
-    if(c2.status.compare_with) st.push(`比對基準：${c2.status.compare_with}`);
-    document.getElementById("c2-status").textContent=st.join("・");
-  }
+    if(f.status){
+      if(f.status.pcf_date) st.push(`持股資料日 ${fdate(f.status.pcf_date)}`);
+      if(f.status.count) st.push(`共 ${f.status.count} 檔台股`);
+      if(f.status.compare_with) st.push(`比對基準 ${fdate(f.status.compare_with)}`);
+    }
+    wrap.insertAdjacentHTML("beforeend", `<section>
+      <div class="sec-head"><span class="sec-no">${no}</span><h2>${f.id} 加碼・週線翻揚</h2></div>
+      <div class="sec-desc">${f.label}（${f.id}）較前一交易日增加持股的個股，且週線由下轉彎向上</div>
+      <div class="card">${body}</div>
+      <div class="sec-desc" style="margin-top:10px">${st.join("・")}</div>
+    </section>`);
+  });
 }).catch(()=>{
   document.getElementById("list1").innerHTML=
   document.getElementById("list2").innerHTML=

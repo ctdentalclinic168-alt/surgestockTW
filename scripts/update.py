@@ -37,10 +37,20 @@ TOP_N = 10               # 外資週買超前 N 名
 PRICE_MONTHS = 3         # 抓幾個月股價來算週線
 REQ_DELAY = 0.6          # 對交易所 API 的禮貌延遲(秒)
 
-# 00991A 持股資料端點：復華投信網頁為 JS 動態載入，
-# 請用瀏覽器 DevTools > Network 找到實際 JSON/API 網址後填入環境變數 PCF_URL
-# (GitHub repo > Settings > Secrets and variables > Actions > Variables)
-PCF_URL = os.environ.get("PCF_URL", "").strip()
+# ---- 追蹤的主動式ETF清單 ----------------------------------------
+# 00991A(主動復華未來50)：復華 PCF API，pcfDate 每天自動帶入
+# 00993A(主動安聯台灣)：安聯官網為 JS 動態載入，需用 DevTools 找到
+#   持股 JSON API 後，填入 GitHub Actions Variables 的 ALLIANZ_PCF_URL
+PCF_TEMPLATE = ("https://www.fhtrust.com.tw/api/ETFPcf"
+                "?fundID=ETF23&pcfDate={date}")
+PCF_URL = os.environ.get("PCF_URL", "").strip()          # 00991A 覆寫用
+
+FUNDS = [
+    {"id": "00991A", "label": "主動復華未來50", "source": "fh",
+     "unit": "股/基數"},
+    {"id": "00993A", "label": "主動安聯台灣", "source": "env",
+     "env": "ALLIANZ_PCF_URL", "unit": "股"},
+]
 MANUAL_HOLDINGS = os.path.join(DATA_DIR, "manual_holdings.csv")
 
 UA = {"User-Agent": "Mozilla/5.0 (daily-signal-tracker; personal use)"}
@@ -345,43 +355,127 @@ def parse_holdings(text):
     return out
 
 
-def fetch_holdings_today():
-    """優先順序：manual_holdings.csv > PCF_URL > 復華官網頁面(可能因JS動態載入而失敗)"""
-    if os.path.exists(MANUAL_HOLDINGS):
-        with open(MANUAL_HOLDINGS, encoding="utf-8") as f:
-            h = parse_holdings(f.read())
-        if h:
-            return h, "manual_csv"
+def parse_fh_pcf(text):
+    """
+    復華 PCF API 格式：
+      {"postDate":"2026/07/09","result":[{"aType":"股票","id":"2330 TT",
+       "name":"台積電...","share":1234}, ...]}
+    只取台股(id 結尾 TT)。share 為「每申購基數」股數。
+    回傳 ({code:{name,shares}}, postDate字串或None)
+    """
+    try:
+        j = json.loads(text)
+    except Exception:
+        return {}, None
+    out = {}
+    for item in j.get("result") or []:
+        if not isinstance(item, dict) or item.get("aType") not in (None, "股票"):
+            continue
+        raw_id = str(item.get("id", "")).strip()
+        m = re.match(r"^(\d{4,6}[A-Z]?)\s+TT$", raw_id)
+        if not m:
+            continue
+        shares = num(item.get("share"))
+        if shares and shares > 0:
+            out[m.group(1)] = {"name": str(item.get("name", "")).strip(),
+                               "shares": shares}
+    post = str(j.get("postDate", "")).replace("/", "") or None
+    return out, post
+
+
+def fetch_holdings_fh():
+    """00991A：復華 PCF API，從今天往回試最多 6 天(假日無資料)"""
     if PCF_URL:
         raw = http_get(PCF_URL)
         if raw:
-            h = parse_holdings(raw)
+            h, post = parse_fh_pcf(raw)
             if h:
-                return h, "pcf_url"
-    raw = http_get("https://www.fhtrust.com.tw/ETF/trade_list")
-    if raw:
-        h = parse_holdings(raw)
+                return h, "pcf_url", post
+    d = datetime.now(TZ_TAIPEI)
+    for _ in range(6):
+        url = PCF_TEMPLATE.format(date=d.strftime("%Y/%m/%d"))
+        raw = http_get(url)
+        time.sleep(REQ_DELAY)
+        if raw:
+            h, post = parse_fh_pcf(raw)
+            if h:
+                return h, "fhtrust_api", post
+        d -= timedelta(days=1)
+    return {}, "unavailable", None
+
+
+def fetch_holdings_env(env_name):
+    """由環境變數提供的持股 JSON/HTML 網址(如安聯 00993A)"""
+    url = os.environ.get(env_name, "").strip()
+    if not url:
+        return {}, "not_configured", None
+    # 網址中的 {date} 佔位符每天自動代入(容許 2026/07/10 格式)
+    if "{date}" in url:
+        url = url.replace("{date}", datetime.now(TZ_TAIPEI).strftime("%Y/%m/%d"))
+    raw = http_get(url)
+    if not raw:
+        return {}, "fetch_failed", None
+    h, post = parse_fh_pcf(raw)          # 先試復華式格式
+    if not h:
+        h = parse_holdings(raw)          # 通用 JSON/CSV/HTML 解析
+        post = None
+    return (h, "env_url", post) if h else ({}, "parse_failed", None)
+
+
+def fetch_holdings_for(fund):
+    """依基金設定取得持股，優先讀 data/manual_holdings_<id>.csv 手動檔"""
+    manual = os.path.join(DATA_DIR, f"manual_holdings_{fund['id']}.csv")
+    if os.path.exists(manual):
+        with open(manual, encoding="utf-8") as f:
+            h = parse_holdings(f.read())
         if h:
-            return h, "fhtrust_page"
-    return {}, "unavailable"
+            return h, "manual_csv", None
+    if fund["source"] == "fh":
+        return fetch_holdings_fh()
+    if fund["source"] == "env":
+        return fetch_holdings_env(fund["env"])
+    return {}, "unknown_source", None
 
 
-def condition2(today_str):
-    holdings, source = fetch_holdings_today()
+def migrate_old_snapshots():
+    """把舊版存在 holdings/ 根目錄的 00991A 快照搬進子資料夾"""
+    dst = os.path.join(HOLD_DIR, "00991A")
+    os.makedirs(dst, exist_ok=True)
+    for f in os.listdir(HOLD_DIR):
+        p = os.path.join(HOLD_DIR, f)
+        if f.endswith(".json") and os.path.isfile(p):
+            os.replace(p, os.path.join(dst, f))
+
+
+def track_fund(fund, today_str):
+    """
+    比對某檔主動式ETF前後兩份持股快照，找出加碼(含新進場)且週線翻揚者。
+    share 若為每申購基數股數，比例仍正確——增加即代表權重提升(加碼)。
+    """
+    holdings, source, post_date = fetch_holdings_for(fund)
     status = {"source": source, "count": len(holdings)}
+    out = {"id": fund["id"], "label": fund["label"], "unit": fund["unit"],
+           "matched": [], "status": status, "error": None}
     if not holdings:
-        return [], status, ("無法取得 00991A 持股資料。請設定 PCF_URL 變數"
-                            "或提供 data/manual_holdings.csv（見 README）")
-    # 存今日快照
-    snap = os.path.join(HOLD_DIR, f"{today_str}.json")
-    with open(snap, "w", encoding="utf-8") as f:
+        if source == "not_configured":
+            out["error"] = (f"尚未設定 {fund.get('env','')} 資料網址，"
+                            "請見 README 設定後即可開始追蹤")
+        else:
+            out["error"] = f"無法取得 {fund['id']} 持股資料，明日將自動重試"
+        return out
+    snap_date = post_date or today_str
+    status["pcf_date"] = snap_date
+    fund_dir = os.path.join(HOLD_DIR, fund["id"])
+    os.makedirs(fund_dir, exist_ok=True)
+    with open(os.path.join(fund_dir, f"{snap_date}.json"), "w",
+              encoding="utf-8") as f:
         json.dump(holdings, f, ensure_ascii=False)
-    # 找最近一份「之前」的快照
-    prev_files = sorted(f for f in os.listdir(HOLD_DIR)
-                        if f.endswith(".json") and f < f"{today_str}.json")
+    prev_files = sorted(f for f in os.listdir(fund_dir)
+                        if f.endswith(".json") and f < f"{snap_date}.json")
     if not prev_files:
-        return [], status, "首次建立持股快照，明日起開始比對加碼"
-    with open(os.path.join(HOLD_DIR, prev_files[-1]), encoding="utf-8") as f:
+        out["error"] = "首次建立持股快照，下個交易日起開始比對加碼"
+        return out
+    with open(os.path.join(fund_dir, prev_files[-1]), encoding="utf-8") as f:
         prev = json.load(f)
     status["compare_with"] = prev_files[-1].replace(".json", "")
 
@@ -393,23 +487,27 @@ def condition2(today_str):
         change = v["shares"] - before
         if change <= 0:
             continue
+        add_pct = round(change / before * 100, 1) if before else None
         daily = get_daily_closes(code)
         ok, tail, desc = weekly_turn_up(daily)
         item = {"code": code, "name": v["name"],
-                "prev_lots": round(before / 1000), "now_lots": round(v["shares"] / 1000),
-                "add_lots": round(change / 1000),
+                "prev_shares": int(before), "now_shares": int(v["shares"]),
+                "add_shares": int(change), "add_pct": add_pct,
                 "is_new": before == 0,
                 "turn": ok, "weekly_closes": tail, "turn_desc": desc}
         if ok:
             results.append(item)
-    results.sort(key=lambda x: -x["add_lots"])
-    return results, status, None
+    results.sort(key=lambda x: (-(x["add_pct"] if x["add_pct"] is not None else 9999),))
+    out["matched"] = results
+    return out
+
 
 
 # ---------------------------------------------------------------- main
 def main():
     for d in (T86_DIR, PRICE_DIR, HOLD_DIR):
         os.makedirs(d, exist_ok=True)
+    migrate_old_snapshots()
     now = datetime.now(TZ_TAIPEI)
     today_str = now.strftime("%Y%m%d")
 
@@ -421,8 +519,10 @@ def main():
     print("== 條件一：外資轉買 + 週線翻揚 ==")
     c1, c1_raw, c1_err = condition1(t86_days)
 
-    print("== 條件二：00991A 加碼 + 週線翻揚 ==")
-    c2, c2_status, c2_err = condition2(trade_date or today_str)
+    funds_out = []
+    for fund in FUNDS:
+        print(f"== {fund['id']} {fund['label']} 加碼 + 週線翻揚 ==")
+        funds_out.append(track_fund(fund, trade_date or today_str))
 
     out = {
         "generated_at": now.strftime("%Y-%m-%d %H:%M"),
@@ -430,12 +530,13 @@ def main():
         "params": {"week_window": WEEK_WINDOW, "sell_streak_min": SELL_STREAK_MIN,
                    "top_n": TOP_N},
         "condition1": {"matched": c1, "top10": c1_raw, "error": c1_err},
-        "condition2": {"matched": c2, "status": c2_status, "error": c2_err},
+        "funds": funds_out,
     }
     with open(os.path.join(DATA_DIR, "latest.json"), "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=1)
     print("已寫入 data/latest.json")
-    print(f"條件一符合 {len(c1)} 檔；條件二符合 {len(c2)} 檔")
+    print(f"條件一符合 {len(c1)} 檔；" +
+          "；".join(f"{f['id']} 符合 {len(f['matched'])} 檔" for f in funds_out))
 
 
 if __name__ == "__main__":
