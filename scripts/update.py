@@ -12,6 +12,7 @@
 
 輸出：data/latest.json （供 index.html 讀取）
 """
+VERSION = "v6"
 
 import json
 import os
@@ -90,7 +91,7 @@ def http_post_json(url, payload, retries=3, referer=None):
     """以 JSON body 發送 POST(安聯 API 使用)"""
     body = json.dumps(payload).encode("utf-8")
     headers = dict(UA)
-    headers["Content-Type"] = "application/json"
+    headers["Content-Type"] = "application/json;charset=UTF-8"
     if referer:
         headers["Referer"] = referer
         headers["Origin"] = re.match(r"https?://[^/]+", referer).group(0)
@@ -101,11 +102,21 @@ def http_post_json(url, payload, retries=3, referer=None):
                                          method="POST")
             with OPENER.open(req, timeout=30) as r:
                 return r.read().decode("utf-8", errors="replace")
+        except urllib.error.HTTPError as e:
+            detail = ""
+            try:
+                detail = e.read().decode("utf-8", errors="replace")[:150]
+            except Exception:
+                pass
+            last = f"HTTP {e.code} {detail}"
+            print(f"[diag] POST {payload} -> {last}")
+            if e.code in (400, 403, 404, 415):
+                break  # 格式問題重試無用，換下一種格式
+            time.sleep(2 + i * 2)
         except Exception as e:  # noqa
             last = e
             time.sleep(2 + i * 2)
     LAST_HTTP_ERROR["msg"] = f"POST {url} -> {last}"
-    print(f"[warn] POST 失敗 {url}: {last}")
     return None
 
 
@@ -533,17 +544,28 @@ def fetch_holdings_env(env_name):
 
 
 def fetch_holdings_allianz(fund_no):
-    """00993A：安聯 POST API。Date=null 回傳最新一日 PCF"""
-    # 優先 ALLIANZ_PCF_URL 覆寫(若日後端點變動可免改碼)
+    """00993A：安聯 POST API。先暖身取cookie，再輪試多種參數格式"""
     override = os.environ.get("ALLIANZ_PCF_URL", "").strip()
     url = fill_date_placeholders(override) if override else ALLIANZ_API
-    raw = http_post_json(url, {"Date": None, "FundNo": fund_no},
-                         referer="https://etf.allianzgi.com.tw/list-trade")
+    ref = "https://etf.allianzgi.com.tw/list-trade"
+    http_get(ref)                      # cookie 暖身
     time.sleep(REQ_DELAY)
-    if not raw:
-        return {}, "fetch_failed", None
-    h, post = parse_allianz_pcf(raw)
-    return (h, "allianz_api", post) if h else ({}, "parse_failed", None)
+    today = datetime.now(TZ_TAIPEI).strftime("%Y-%m-%d")
+    variants = [
+        {"Date": None, "FundNo": fund_no},
+        {"date": None, "fundNo": fund_no},
+        {"Date": "", "FundNo": fund_no},
+        {"Date": today, "FundNo": fund_no},
+    ]
+    for payload in variants:
+        raw = http_post_json(url, payload, referer=ref)
+        time.sleep(REQ_DELAY)
+        if raw:
+            h, post = parse_allianz_pcf(raw)
+            if h:
+                return h, "allianz_api", post
+            print(f"[diag] 安聯回應無持股: {raw.strip()[:120]}")
+    return {}, "fetch_failed", None
 
 
 def fetch_holdings_for(fund):
@@ -653,6 +675,7 @@ def main():
         funds_out.append(track_fund(fund, trade_date or today_str))
 
     out = {
+        "version": VERSION,
         "generated_at": now.strftime("%Y-%m-%d %H:%M"),
         "trade_date": trade_date,
         "params": {"week_window": WEEK_WINDOW, "sell_streak_min": SELL_STREAK_MIN,
