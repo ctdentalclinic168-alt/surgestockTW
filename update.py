@@ -53,28 +53,42 @@ FUNDS = [
 ]
 MANUAL_HOLDINGS = os.path.join(DATA_DIR, "manual_holdings.csv")
 
-UA = {"User-Agent": "Mozilla/5.0 (daily-signal-tracker; personal use)"}
+UA = {
+    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                   "AppleWebKit/537.36 (KHTML, like Gecko) "
+                   "Chrome/126.0.0.0 Safari/537.36"),
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "zh-TW,zh;q=0.9",
+}
+LAST_HTTP_ERROR = {"msg": ""}
 
 
-def http_get(url, retries=3):
+def http_get(url, retries=3, referer=None):
+    headers = dict(UA)
+    if referer:
+        headers["Referer"] = referer
     last = None
     for i in range(retries):
         try:
-            req = urllib.request.Request(url, headers=UA)
+            req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=30) as r:
                 return r.read().decode("utf-8", errors="replace")
         except Exception as e:  # noqa
             last = e
             time.sleep(2 + i * 2)
+    LAST_HTTP_ERROR["msg"] = f"GET {url} -> {last}"
     print(f"[warn] GET 失敗 {url}: {last}")
     return None
 
 
-def http_post_json(url, payload, retries=3):
+def http_post_json(url, payload, retries=3, referer=None):
     """以 JSON body 發送 POST(安聯 API 使用)"""
     body = json.dumps(payload).encode("utf-8")
     headers = dict(UA)
     headers["Content-Type"] = "application/json"
+    if referer:
+        headers["Referer"] = referer
+        headers["Origin"] = re.match(r"https?://[^/]+", referer).group(0)
     last = None
     for i in range(retries):
         try:
@@ -85,6 +99,7 @@ def http_post_json(url, payload, retries=3):
         except Exception as e:  # noqa
             last = e
             time.sleep(2 + i * 2)
+    LAST_HTTP_ERROR["msg"] = f"POST {url} -> {last}"
     print(f"[warn] POST 失敗 {url}: {last}")
     return None
 
@@ -413,7 +428,7 @@ def fetch_holdings_fh():
     d = datetime.now(TZ_TAIPEI)
     for _ in range(6):
         url = PCF_TEMPLATE.format(date=d.strftime("%Y/%m/%d"))
-        raw = http_get(url)
+        raw = http_get(url, referer="https://www.fhtrust.com.tw/ETF/trade_list")
         time.sleep(REQ_DELAY)
         if raw:
             h, post = parse_fh_pcf(raw)
@@ -507,7 +522,8 @@ def fetch_holdings_allianz(fund_no):
     # 優先 ALLIANZ_PCF_URL 覆寫(若日後端點變動可免改碼)
     override = os.environ.get("ALLIANZ_PCF_URL", "").strip()
     url = fill_date_placeholders(override) if override else ALLIANZ_API
-    raw = http_post_json(url, {"Date": None, "FundNo": fund_no})
+    raw = http_post_json(url, {"Date": None, "FundNo": fund_no},
+                         referer="https://etf.allianzgi.com.tw/list-trade")
     time.sleep(REQ_DELAY)
     if not raw:
         return {}, "fetch_failed", None
@@ -556,7 +572,9 @@ def track_fund(fund, today_str):
             out["error"] = (f"尚未設定 {fund.get('env','')} 資料網址，"
                             "請見 README 設定後即可開始追蹤")
         else:
-            out["error"] = f"無法取得 {fund['id']} 持股資料，明日將自動重試"
+            detail = LAST_HTTP_ERROR["msg"][:160]
+            out["error"] = (f"無法取得 {fund['id']} 持股資料，明日將自動重試"
+                            + (f"（{detail}）" if detail else ""))
         return out
     snap_date = post_date or today_str
     status["pcf_date"] = snap_date
