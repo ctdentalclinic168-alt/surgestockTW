@@ -12,7 +12,7 @@
 
 輸出：data/latest.json （供 index.html 讀取）
 """
-VERSION = "v6"
+VERSION = "v7"
 
 import json
 import os
@@ -87,11 +87,13 @@ def http_get(url, retries=3, referer=None, xhr=False):
     return None
 
 
-def http_post_json(url, payload, retries=3, referer=None):
+def http_post_json(url, payload, retries=3, referer=None, extra_headers=None):
     """以 JSON body 發送 POST(安聯 API 使用)"""
     body = json.dumps(payload).encode("utf-8")
     headers = dict(UA)
     headers["Content-Type"] = "application/json;charset=UTF-8"
+    if extra_headers:
+        headers.update(extra_headers)
     if referer:
         headers["Referer"] = referer
         headers["Origin"] = re.match(r"https?://[^/]+", referer).group(0)
@@ -407,10 +409,10 @@ def parse_holdings(text):
 
 def parse_fh_pcf(text):
     """
-    復華 PCF API 格式：
-      {"postDate":"2026/07/09","result":[{"aType":"股票","id":"2330 TT",
+    復華 PCF 格式(容許外層再包一層 result 清單)：
+      {...,"postDate":"2026/07/10","result":[{"aType":"股票","id":"2330 TT",
        "name":"台積電...","share":1234}, ...]}
-    只取台股(id 結尾 TT)。share 為「每申購基數」股數。
+    遞迴走訪整份 JSON，收集所有 id 為「XXXX TT」的台股。
     回傳 ({code:{name,shares}}, postDate字串或None)
     """
     try:
@@ -418,95 +420,21 @@ def parse_fh_pcf(text):
     except Exception:
         return {}, None
     out = {}
-    for item in j.get("result") or []:
-        if not isinstance(item, dict) or item.get("aType") not in (None, "股票"):
-            continue
-        raw_id = str(item.get("id", "")).strip()
-        m = re.match(r"^(\d{4,6}[A-Z]?)\s+TT$", raw_id)
-        if not m:
-            continue
-        shares = num(item.get("share"))
-        if shares and shares > 0:
-            out[m.group(1)] = {"name": str(item.get("name", "")).strip(),
-                               "shares": shares}
-    post = str(j.get("postDate", "")).replace("/", "") or None
-    return out, post
-
-
-def fetch_holdings_fh():
-    """00991A：復華 PCF API，從今天往回試最多 6 天(假日無資料)"""
-    if PCF_URL:
-        raw = http_get(PCF_URL)
-        if raw:
-            h, post = parse_fh_pcf(raw)
-            if h:
-                return h, "pcf_url", post
-    # 先造訪官網頁面取得 session cookie(常見防爬蟲要求)
-    http_get("https://www.fhtrust.com.tw/ETF/trade_list")
-    time.sleep(REQ_DELAY)
-    snippet = ""
-    d = datetime.now(TZ_TAIPEI)
-    for _ in range(6):
-        url = PCF_TEMPLATE.format(date=d.strftime("%Y/%m/%d"))
-        raw = http_get(url, referer="https://www.fhtrust.com.tw/ETF/trade_list",
-                       xhr=True)
-        time.sleep(REQ_DELAY)
-        if raw:
-            h, post = parse_fh_pcf(raw)
-            if h:
-                return h, "fhtrust_api", post
-            if not snippet:
-                snippet = raw.strip()[:120]
-                print(f"[diag] 復華回應非預期格式: {snippet}")
-        d -= timedelta(days=1)
-    if snippet:
-        LAST_HTTP_ERROR["msg"] = f"回應非JSON: {snippet}"
-    return {}, "unavailable", None
-
-
-def parse_allianz_pcf(text):
-    """
-    安聯 PCF API 格式：
-      {"Entries":{"CPcfdate":"2026-07-10T00:00:00","DynamicTableData":[
-        {"TableTitle":"股票 (96.46%)","Columns":[{"Name":"序號"},...],
-         "Rows":[["1","2330","台積電","475,000","10.89%"], ...]}, ...]}}
-    只取「股票」表格。回傳 ({code:{name,shares}}, postDate或None)
-    """
-    try:
-        j = json.loads(text)
-    except Exception:
-        return {}, None
-    out = {}
-    post = None
+    post = {"v": None}
 
     def walk(o):
-        nonlocal post
         if isinstance(o, dict):
-            if not post:
-                for k in ("CPcfdate", "PcfDate", "pcfDate"):
-                    if o.get(k):
-                        m = re.match(r"(\d{4})-(\d{2})-(\d{2})", str(o[k]))
-                        if m:
-                            post = "".join(m.groups())
-            rows = o.get("Rows")
-            title = str(o.get("TableTitle", ""))
-            cols = [str(c.get("Name", "")) for c in o.get("Columns", [])
-                    if isinstance(c, dict)]
-            if isinstance(rows, list) and ("股票" in title or "股票代號" in cols):
-                # 找出代號與股數欄位位置(找不到就用預設 1,3)
-                i_code = next((i for i, c in enumerate(cols) if "代號" in c), 1)
-                i_sh = next((i for i, c in enumerate(cols) if "股數" in c), 3)
-                for r in rows:
-                    if not isinstance(r, list) or len(r) <= max(i_code, i_sh):
-                        continue
-                    code = str(r[i_code]).strip()
-                    if not re.fullmatch(r"\d{4,6}[A-Z]?", code):
-                        continue
-                    shares = num(r[i_sh])
-                    if shares and shares > 0:
-                        name = str(r[i_code + 1]).strip().rstrip("*") \
-                               if len(r) > i_code + 1 else ""
-                        out[code] = {"name": name, "shares": shares}
+            if not post["v"] and o.get("postDate"):
+                m = re.match(r"(\d{4})/(\d{2})/(\d{2})", str(o["postDate"]))
+                if m:
+                    post["v"] = "".join(m.groups())
+            raw_id = str(o.get("id", "")).strip()
+            m = re.match(r"^(\d{4,6}[A-Z]?)\s+TT$", raw_id)
+            if m and o.get("aType") in (None, "股票"):
+                shares = num(o.get("share"))
+                if shares and shares > 0:
+                    out[m.group(1)] = {"name": str(o.get("name", "")).strip(),
+                                       "shares": shares}
             for v in o.values():
                 walk(v)
         elif isinstance(o, list):
@@ -514,7 +442,7 @@ def parse_allianz_pcf(text):
                 walk(v)
 
     walk(j)
-    return out, post
+    return out, post["v"]
 
 
 def fill_date_placeholders(url):
@@ -543,13 +471,35 @@ def fetch_holdings_env(env_name):
     return (h, "env_url", post) if h else ({}, "parse_failed", None)
 
 
+def extract_csrf_tokens(html, cookies):
+    """從頁面HTML與cookie中收集可能的anti-forgery token"""
+    tokens = {}
+    if html:
+        m = re.search(r'name="__RequestVerificationToken"[^>]*value="([^"]+)"',
+                      html)
+        if m:
+            tokens["RequestVerificationToken"] = m.group(1)
+        m = re.search(r'<meta[^>]+name="csrf-token"[^>]+content="([^"]+)"',
+                      html, re.I)
+        if m:
+            tokens["X-CSRF-TOKEN"] = m.group(1)
+    for c in cookies:
+        if "XSRF" in c.name.upper():
+            tokens["X-XSRF-TOKEN"] = c.value
+        elif "CSRF" in c.name.upper():
+            tokens.setdefault("X-CSRF-TOKEN", c.value)
+    return tokens
+
+
 def fetch_holdings_allianz(fund_no):
-    """00993A：安聯 POST API。先暖身取cookie，再輪試多種參數格式"""
+    """00993A：安聯 POST API。先暖身取cookie/token，再輪試多種參數格式"""
     override = os.environ.get("ALLIANZ_PCF_URL", "").strip()
     url = fill_date_placeholders(override) if override else ALLIANZ_API
     ref = "https://etf.allianzgi.com.tw/list-trade"
-    http_get(ref)                      # cookie 暖身
+    page = http_get(ref)               # cookie 暖身
     time.sleep(REQ_DELAY)
+    tokens = extract_csrf_tokens(page, COOKIES)
+    print(f"[diag] 安聯cookie: {[c.name for c in COOKIES]} token: {list(tokens)}")
     today = datetime.now(TZ_TAIPEI).strftime("%Y-%m-%d")
     variants = [
         {"Date": None, "FundNo": fund_no},
@@ -558,7 +508,7 @@ def fetch_holdings_allianz(fund_no):
         {"Date": today, "FundNo": fund_no},
     ]
     for payload in variants:
-        raw = http_post_json(url, payload, referer=ref)
+        raw = http_post_json(url, payload, referer=ref, extra_headers=tokens)
         time.sleep(REQ_DELAY)
         if raw:
             h, post = parse_allianz_pcf(raw)
