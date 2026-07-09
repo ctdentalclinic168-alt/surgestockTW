@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-07-09 23:42",
+ "generated_at": "2026-07-10 00:44",
  "trade_date": "20260709",
  "params": {
   "week_window": 5,
@@ -12,19 +12,37 @@
    {
     "code": "2409",
     "name": "友達",
-    "weekly_net_lots": 136621,
+    "weekly_net_lots": 177239,
     "buy_streak": 1,
-    "sell_streak": 1,
+    "sell_streak": 2,
     "flip": false,
     "turn": null,
     "weekly_closes": [],
     "turn_desc": ""
    },
    {
+    "code": "2618",
+    "name": "長榮航",
+    "weekly_net_lots": 102977,
+    "buy_streak": 3,
+    "sell_streak": 6,
+    "flip": true,
+    "turn": false,
+    "weekly_closes": [
+     37.7,
+     38.7,
+     42.55,
+     43.8,
+     43.85,
+     39.6
+    ],
+    "turn_desc": "上上週43.8 → 上週43.85 → 本週39.6"
+   },
+   {
     "code": "2887",
     "name": "台新新光金",
-    "weekly_net_lots": 83647,
-    "buy_streak": 4,
+    "weekly_net_lots": 92499,
+    "buy_streak": 5,
     "sell_streak": 3,
     "flip": true,
     "turn": false,
@@ -41,29 +59,7 @@
    {
     "code": "2883",
     "name": "凱基金",
-    "weekly_net_lots": 80173,
-    "buy_streak": 0,
-    "sell_streak": 1,
-    "flip": false,
-    "turn": null,
-    "weekly_closes": [],
-    "turn_desc": ""
-   },
-   {
-    "code": "2882",
-    "name": "國泰金",
-    "weekly_net_lots": 68408,
-    "buy_streak": 0,
-    "sell_streak": 1,
-    "flip": false,
-    "turn": null,
-    "weekly_closes": [],
-    "turn_desc": ""
-   },
-   {
-    "code": "1314",
-    "name": "中石化",
-    "weekly_net_lots": 55137,
+    "weekly_net_lots": 78183,
     "buy_streak": 0,
     "sell_streak": 1,
     "flip": false,
@@ -74,18 +70,7 @@
    {
     "code": "2884",
     "name": "玉山金",
-    "weekly_net_lots": 47793,
-    "buy_streak": 4,
-    "sell_streak": 1,
-    "flip": false,
-    "turn": null,
-    "weekly_closes": [],
-    "turn_desc": ""
-   },
-   {
-    "code": "2324",
-    "name": "仁寶",
-    "weekly_net_lots": 46381,
+    "weekly_net_lots": 70616,
     "buy_streak": 5,
     "sell_streak": 1,
     "flip": false,
@@ -94,21 +79,10 @@
     "turn_desc": ""
    },
    {
-    "code": "2881",
-    "name": "富邦金",
-    "weekly_net_lots": 44425,
+    "code": "2303",
+    "name": "聯電",
+    "weekly_net_lots": 51643,
     "buy_streak": 0,
-    "sell_streak": 1,
-    "flip": false,
-    "turn": null,
-    "weekly_closes": [],
-    "turn_desc": ""
-   },
-   {
-    "code": "2105",
-    "name": "正新",
-    "weekly_net_lots": 42700,
-    "buy_streak": 6,
     "sell_streak": 1,
     "flip": false,
     "turn": null,
@@ -118,8 +92,41 @@
    {
     "code": "2353",
     "name": "宏碁",
-    "weekly_net_lots": 36164,
-    "buy_streak": 9,
+    "weekly_net_lots": 48227,
+    "buy_streak": 10,
+    "sell_streak": 1,
+    "flip": false,
+    "turn": null,
+    "weekly_closes": [],
+    "turn_desc": ""
+   },
+   {
+    "code": "2892",
+    "name": "第一金",
+    "weekly_net_lots": 44578,
+    "buy_streak": 0,
+    "sell_streak": 1,
+    "flip": false,
+    "turn": null,
+    "weekly_closes": [],
+    "turn_desc": ""
+   },
+   {
+    "code": "2890",
+    "name": "永豐金",
+    "weekly_net_lots": 43499,
+    "buy_streak": 0,
+    "sell_streak": 1,
+    "flip": false,
+    "turn": null,
+    "weekly_closes": [],
+    "turn_desc": ""
+   },
+   {
+    "code": "2324",
+    "name": "仁寶",
+    "weekly_net_lots": 42540,
+    "buy_streak": 6,
     "sell_streak": 1,
     "flip": false,
     "turn": null,
@@ -129,12 +136,28 @@
   ],
   "error": null
  },
- "condition2": {
-  "matched": [],
-  "status": {
-   "source": "unavailable",
-   "count": 0
+ "funds": [
+  {
+   "id": "00991A",
+   "label": "主動復華未來50",
+   "unit": "股/基數",
+   "matched": [],
+   "status": {
+    "source": "unavailable",
+    "count": 0
+   },
+   "error": "無法取得 00991A 持股資料，明日將自動重試"
   },
-  "error": "無法取得 00991A 持股資料。請設定 PCF_URL 變數或提供 data/manual_holdings.csv（見 README）"
- }
+  {
+   "id": "00993A",
+   "label": "主動安聯台灣",
+   "unit": "股",
+   "matched": [],
+   "status": {
+    "source": "not_configured",
+    "count": 0
+   },
+   "error": "尚未設定 ALLIANZ_PCF_URL 資料網址，請見 README 設定後即可開始追蹤"
+  }
+ ]
 }
