@@ -39,34 +39,68 @@ REQ_DELAY = 0.6          # 對交易所 API 的禮貌延遲(秒)
 
 # ---- 追蹤的主動式ETF清單 ----------------------------------------
 # 00991A(主動復華未來50)：復華 PCF API，pcfDate 每天自動帶入
-# 00993A(主動安聯台灣)：安聯官網為 JS 動態載入，需用 DevTools 找到
-#   持股 JSON API 後，填入 GitHub Actions Variables 的 ALLIANZ_PCF_URL
+# 00993A(主動安聯台灣)：安聯 POST API，Date=null 自動回傳最新資料
 PCF_TEMPLATE = ("https://www.fhtrust.com.tw/api/ETFPcf"
                 "?fundID=ETF23&pcfDate={date}")
 PCF_URL = os.environ.get("PCF_URL", "").strip()          # 00991A 覆寫用
+ALLIANZ_API = "https://etf.allianzgi.com.tw/webapi/api/Fund/GetFundTradeInfo"
 
 FUNDS = [
     {"id": "00991A", "label": "主動復華未來50", "source": "fh",
      "unit": "股/基數"},
-    {"id": "00993A", "label": "主動安聯台灣", "source": "env",
-     "env": "ALLIANZ_PCF_URL", "unit": "股"},
+    {"id": "00993A", "label": "主動安聯台灣", "source": "allianz",
+     "fund_no": "E0002", "unit": "股"},
 ]
 MANUAL_HOLDINGS = os.path.join(DATA_DIR, "manual_holdings.csv")
 
-UA = {"User-Agent": "Mozilla/5.0 (daily-signal-tracker; personal use)"}
+UA = {
+    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                   "AppleWebKit/537.36 (KHTML, like Gecko) "
+                   "Chrome/126.0.0.0 Safari/537.36"),
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "zh-TW,zh;q=0.9",
+}
+LAST_HTTP_ERROR = {"msg": ""}
 
 
-def http_get(url, retries=3):
+def http_get(url, retries=3, referer=None):
+    headers = dict(UA)
+    if referer:
+        headers["Referer"] = referer
     last = None
     for i in range(retries):
         try:
-            req = urllib.request.Request(url, headers=UA)
+            req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=30) as r:
                 return r.read().decode("utf-8", errors="replace")
         except Exception as e:  # noqa
             last = e
             time.sleep(2 + i * 2)
+    LAST_HTTP_ERROR["msg"] = f"GET {url} -> {last}"
     print(f"[warn] GET 失敗 {url}: {last}")
+    return None
+
+
+def http_post_json(url, payload, retries=3, referer=None):
+    """以 JSON body 發送 POST(安聯 API 使用)"""
+    body = json.dumps(payload).encode("utf-8")
+    headers = dict(UA)
+    headers["Content-Type"] = "application/json"
+    if referer:
+        headers["Referer"] = referer
+        headers["Origin"] = re.match(r"https?://[^/]+", referer).group(0)
+    last = None
+    for i in range(retries):
+        try:
+            req = urllib.request.Request(url, data=body, headers=headers,
+                                         method="POST")
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return r.read().decode("utf-8", errors="replace")
+        except Exception as e:  # noqa
+            last = e
+            time.sleep(2 + i * 2)
+    LAST_HTTP_ERROR["msg"] = f"POST {url} -> {last}"
+    print(f"[warn] POST 失敗 {url}: {last}")
     return None
 
 
@@ -394,7 +428,7 @@ def fetch_holdings_fh():
     d = datetime.now(TZ_TAIPEI)
     for _ in range(6):
         url = PCF_TEMPLATE.format(date=d.strftime("%Y/%m/%d"))
-        raw = http_get(url)
+        raw = http_get(url, referer="https://www.fhtrust.com.tw/ETF/trade_list")
         time.sleep(REQ_DELAY)
         if raw:
             h, post = parse_fh_pcf(raw)
@@ -404,22 +438,97 @@ def fetch_holdings_fh():
     return {}, "unavailable", None
 
 
+def parse_allianz_pcf(text):
+    """
+    安聯 PCF API 格式：
+      {"Entries":{"CPcfdate":"2026-07-10T00:00:00","DynamicTableData":[
+        {"TableTitle":"股票 (96.46%)","Columns":[{"Name":"序號"},...],
+         "Rows":[["1","2330","台積電","475,000","10.89%"], ...]}, ...]}}
+    只取「股票」表格。回傳 ({code:{name,shares}}, postDate或None)
+    """
+    try:
+        j = json.loads(text)
+    except Exception:
+        return {}, None
+    out = {}
+    post = None
+
+    def walk(o):
+        nonlocal post
+        if isinstance(o, dict):
+            if not post:
+                for k in ("CPcfdate", "PcfDate", "pcfDate"):
+                    if o.get(k):
+                        m = re.match(r"(\d{4})-(\d{2})-(\d{2})", str(o[k]))
+                        if m:
+                            post = "".join(m.groups())
+            rows = o.get("Rows")
+            title = str(o.get("TableTitle", ""))
+            cols = [str(c.get("Name", "")) for c in o.get("Columns", [])
+                    if isinstance(c, dict)]
+            if isinstance(rows, list) and ("股票" in title or "股票代號" in cols):
+                # 找出代號與股數欄位位置(找不到就用預設 1,3)
+                i_code = next((i for i, c in enumerate(cols) if "代號" in c), 1)
+                i_sh = next((i for i, c in enumerate(cols) if "股數" in c), 3)
+                for r in rows:
+                    if not isinstance(r, list) or len(r) <= max(i_code, i_sh):
+                        continue
+                    code = str(r[i_code]).strip()
+                    if not re.fullmatch(r"\d{4,6}[A-Z]?", code):
+                        continue
+                    shares = num(r[i_sh])
+                    if shares and shares > 0:
+                        name = str(r[i_code + 1]).strip().rstrip("*") \
+                               if len(r) > i_code + 1 else ""
+                        out[code] = {"name": name, "shares": shares}
+            for v in o.values():
+                walk(v)
+        elif isinstance(o, list):
+            for v in o:
+                walk(v)
+
+    walk(j)
+    return out, post
+
+
+def fill_date_placeholders(url):
+    """支援 {date}=2026/07/10、{date_dash}=2026-07-10、{yyyymmdd}=20260710"""
+    now = datetime.now(TZ_TAIPEI)
+    return (url.replace("{date}", now.strftime("%Y/%m/%d"))
+               .replace("{date_dash}", now.strftime("%Y-%m-%d"))
+               .replace("{yyyymmdd}", now.strftime("%Y%m%d")))
+
+
 def fetch_holdings_env(env_name):
     """由環境變數提供的持股 JSON/HTML 網址(如安聯 00993A)"""
     url = os.environ.get(env_name, "").strip()
     if not url:
         return {}, "not_configured", None
-    # 網址中的 {date} 佔位符每天自動代入(容許 2026/07/10 格式)
-    if "{date}" in url:
-        url = url.replace("{date}", datetime.now(TZ_TAIPEI).strftime("%Y/%m/%d"))
+    url = fill_date_placeholders(url)
     raw = http_get(url)
     if not raw:
         return {}, "fetch_failed", None
-    h, post = parse_fh_pcf(raw)          # 先試復華式格式
+    h, post = parse_allianz_pcf(raw)     # 先試安聯表格式格式
     if not h:
-        h = parse_holdings(raw)          # 通用 JSON/CSV/HTML 解析
+        h, post = parse_fh_pcf(raw)      # 再試復華式格式
+    if not h:
+        h = parse_holdings(raw)          # 最後用通用 JSON/CSV/HTML 解析
         post = None
     return (h, "env_url", post) if h else ({}, "parse_failed", None)
+
+
+def fetch_holdings_allianz(fund_no):
+    """00993A：安聯 POST API。Date=null 回傳最新一日 PCF"""
+    # 優先 ALLIANZ_PCF_URL 覆寫(若日後端點變動可免改碼)
+    override = os.environ.get("ALLIANZ_PCF_URL", "").strip()
+    url = fill_date_placeholders(override) if override else ALLIANZ_API
+    raw = http_post_json(url, {"Date": None, "FundNo": fund_no},
+                         referer="https://etf.allianzgi.com.tw/list-trade")
+    time.sleep(REQ_DELAY)
+    if not raw:
+        return {}, "fetch_failed", None
+    h, post = parse_allianz_pcf(raw)
+    return (h, "allianz_api", post) if h else ({}, "parse_failed", None)
 
 
 def fetch_holdings_for(fund):
@@ -432,6 +541,8 @@ def fetch_holdings_for(fund):
             return h, "manual_csv", None
     if fund["source"] == "fh":
         return fetch_holdings_fh()
+    if fund["source"] == "allianz":
+        return fetch_holdings_allianz(fund["fund_no"])
     if fund["source"] == "env":
         return fetch_holdings_env(fund["env"])
     return {}, "unknown_source", None
@@ -461,7 +572,9 @@ def track_fund(fund, today_str):
             out["error"] = (f"尚未設定 {fund.get('env','')} 資料網址，"
                             "請見 README 設定後即可開始追蹤")
         else:
-            out["error"] = f"無法取得 {fund['id']} 持股資料，明日將自動重試"
+            detail = LAST_HTTP_ERROR["msg"][:160]
+            out["error"] = (f"無法取得 {fund['id']} 持股資料，明日將自動重試"
+                            + (f"（{detail}）" if detail else ""))
         return out
     snap_date = post_date or today_str
     status["pcf_date"] = snap_date
