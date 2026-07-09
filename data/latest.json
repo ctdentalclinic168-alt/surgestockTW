@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-07-10 01:11",
+ "generated_at": "2026-07-10 01:20",
  "trade_date": "20260709",
  "params": {
   "week_window": 5,
@@ -154,10 +154,10 @@
    "unit": "股",
    "matched": [],
    "status": {
-    "source": "not_configured",
+    "source": "fetch_failed",
     "count": 0
    },
-   "error": "尚未設定 ALLIANZ_PCF_URL 資料網址，請見 README 設定後即可開始追蹤"
+   "error": "無法取得 00993A 持股資料，明日將自動重試（POST https://etf.allianzgi.com.tw/webapi/api/Fund/GetFundTradeInfo -> HTTP Error 400: Bad Request）"
   }
  ]
 }
