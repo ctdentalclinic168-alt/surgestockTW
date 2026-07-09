@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-07-10 01:04",
+ "generated_at": "2026-07-10 01:11",
  "trade_date": "20260709",
  "params": {
   "week_window": 5,
@@ -7,26 +7,7 @@
   "top_n": 10
  },
  "condition1": {
-  "matched": [
-   {
-    "code": "2887",
-    "name": "台新新光金",
-    "weekly_net_lots": 92499,
-    "buy_streak": 5,
-    "sell_streak": 3,
-    "flip": true,
-    "turn": true,
-    "weekly_closes": [
-     23.35,
-     28.6,
-     30.2,
-     32.45,
-     31.9,
-     33.25
-    ],
-    "turn_desc": "上上週32.45 → 上週31.9 → 本週33.25"
-   }
-  ],
+  "matched": [],
   "top10": [
    {
     "code": "2409",
@@ -64,16 +45,16 @@
     "buy_streak": 5,
     "sell_streak": 3,
     "flip": true,
-    "turn": true,
+    "turn": false,
     "weekly_closes": [
-     23.35,
      28.6,
      30.2,
      32.45,
      31.9,
-     33.25
+     34.15,
+     36.85
     ],
-    "turn_desc": "上上週32.45 → 上週31.9 → 本週33.25"
+    "turn_desc": "上上週31.9 → 上週34.15 → 本週36.85"
    },
    {
     "code": "2883",
