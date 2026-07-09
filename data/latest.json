@@ -1,5 +1,6 @@
 {
- "generated_at": "2026-07-10 01:26",
+ "version": "v6",
+ "generated_at": "2026-07-10 01:33",
  "trade_date": "20260709",
  "params": {
   "week_window": 5,
@@ -29,14 +30,14 @@
     "flip": true,
     "turn": false,
     "weekly_closes": [
-     36.05,
      37.7,
      38.7,
      42.55,
      43.8,
-     44.9
+     43.85,
+     39.6
     ],
-    "turn_desc": "上上週42.55 → 上週43.8 → 本週44.9"
+    "turn_desc": "上上週43.8 → 上週43.85 → 本週39.6"
    },
    {
     "code": "2887",
@@ -157,7 +158,7 @@
     "source": "fetch_failed",
     "count": 0
    },
-   "error": "無法取得 00993A 持股資料，明日將自動重試（POST https://etf.allianzgi.com.tw/webapi/api/Fund/GetFundTradeInfo -> HTTP Error 400: Bad Request）"
+   "error": "無法取得 00993A 持股資料，明日將自動重試（POST https://etf.allianzgi.com.tw/webapi/api/Fund/GetFundTradeInfo -> HTTP 400 {\"type\":\"https://tools.ietf.org/html/rfc9110#section-15.5.1\",\"title\":\"Bad Request）"
   }
  ]
 }
