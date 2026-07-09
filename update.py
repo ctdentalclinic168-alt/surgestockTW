@@ -39,17 +39,17 @@ REQ_DELAY = 0.6          # 對交易所 API 的禮貌延遲(秒)
 
 # ---- 追蹤的主動式ETF清單 ----------------------------------------
 # 00991A(主動復華未來50)：復華 PCF API，pcfDate 每天自動帶入
-# 00993A(主動安聯台灣)：安聯官網為 JS 動態載入，需用 DevTools 找到
-#   持股 JSON API 後，填入 GitHub Actions Variables 的 ALLIANZ_PCF_URL
+# 00993A(主動安聯台灣)：安聯 POST API，Date=null 自動回傳最新資料
 PCF_TEMPLATE = ("https://www.fhtrust.com.tw/api/ETFPcf"
                 "?fundID=ETF23&pcfDate={date}")
 PCF_URL = os.environ.get("PCF_URL", "").strip()          # 00991A 覆寫用
+ALLIANZ_API = "https://etf.allianzgi.com.tw/webapi/api/Fund/GetFundTradeInfo"
 
 FUNDS = [
     {"id": "00991A", "label": "主動復華未來50", "source": "fh",
      "unit": "股/基數"},
-    {"id": "00993A", "label": "主動安聯台灣", "source": "env",
-     "env": "ALLIANZ_PCF_URL", "unit": "股"},
+    {"id": "00993A", "label": "主動安聯台灣", "source": "allianz",
+     "fund_no": "E0002", "unit": "股"},
 ]
 MANUAL_HOLDINGS = os.path.join(DATA_DIR, "manual_holdings.csv")
 
@@ -67,6 +67,25 @@ def http_get(url, retries=3):
             last = e
             time.sleep(2 + i * 2)
     print(f"[warn] GET 失敗 {url}: {last}")
+    return None
+
+
+def http_post_json(url, payload, retries=3):
+    """以 JSON body 發送 POST(安聯 API 使用)"""
+    body = json.dumps(payload).encode("utf-8")
+    headers = dict(UA)
+    headers["Content-Type"] = "application/json"
+    last = None
+    for i in range(retries):
+        try:
+            req = urllib.request.Request(url, data=body, headers=headers,
+                                         method="POST")
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return r.read().decode("utf-8", errors="replace")
+        except Exception as e:  # noqa
+            last = e
+            time.sleep(2 + i * 2)
+    print(f"[warn] POST 失敗 {url}: {last}")
     return None
 
 
@@ -483,6 +502,19 @@ def fetch_holdings_env(env_name):
     return (h, "env_url", post) if h else ({}, "parse_failed", None)
 
 
+def fetch_holdings_allianz(fund_no):
+    """00993A：安聯 POST API。Date=null 回傳最新一日 PCF"""
+    # 優先 ALLIANZ_PCF_URL 覆寫(若日後端點變動可免改碼)
+    override = os.environ.get("ALLIANZ_PCF_URL", "").strip()
+    url = fill_date_placeholders(override) if override else ALLIANZ_API
+    raw = http_post_json(url, {"Date": None, "FundNo": fund_no})
+    time.sleep(REQ_DELAY)
+    if not raw:
+        return {}, "fetch_failed", None
+    h, post = parse_allianz_pcf(raw)
+    return (h, "allianz_api", post) if h else ({}, "parse_failed", None)
+
+
 def fetch_holdings_for(fund):
     """依基金設定取得持股，優先讀 data/manual_holdings_<id>.csv 手動檔"""
     manual = os.path.join(DATA_DIR, f"manual_holdings_{fund['id']}.csv")
@@ -493,6 +525,8 @@ def fetch_holdings_for(fund):
             return h, "manual_csv", None
     if fund["source"] == "fh":
         return fetch_holdings_fh()
+    if fund["source"] == "allianz":
+        return fetch_holdings_allianz(fund["fund_no"])
     if fund["source"] == "env":
         return fetch_holdings_env(fund["env"])
     return {}, "unknown_source", None
