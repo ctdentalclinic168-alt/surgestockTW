@@ -20,6 +20,7 @@ import sys
 import time
 import urllib.request
 import urllib.parse
+import http.cookiejar
 from datetime import datetime, timedelta, timezone
 
 # ---------------------------------------------------------------- 基本設定
@@ -61,17 +62,21 @@ UA = {
     "Accept-Language": "zh-TW,zh;q=0.9",
 }
 LAST_HTTP_ERROR = {"msg": ""}
+COOKIES = http.cookiejar.CookieJar()
+OPENER = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(COOKIES))
 
 
-def http_get(url, retries=3, referer=None):
+def http_get(url, retries=3, referer=None, xhr=False):
     headers = dict(UA)
     if referer:
         headers["Referer"] = referer
+    if xhr:
+        headers["X-Requested-With"] = "XMLHttpRequest"
     last = None
     for i in range(retries):
         try:
             req = urllib.request.Request(url, headers=headers)
-            with urllib.request.urlopen(req, timeout=30) as r:
+            with OPENER.open(req, timeout=30) as r:
                 return r.read().decode("utf-8", errors="replace")
         except Exception as e:  # noqa
             last = e
@@ -94,7 +99,7 @@ def http_post_json(url, payload, retries=3, referer=None):
         try:
             req = urllib.request.Request(url, data=body, headers=headers,
                                          method="POST")
-            with urllib.request.urlopen(req, timeout=30) as r:
+            with OPENER.open(req, timeout=30) as r:
                 return r.read().decode("utf-8", errors="replace")
         except Exception as e:  # noqa
             last = e
@@ -425,16 +430,26 @@ def fetch_holdings_fh():
             h, post = parse_fh_pcf(raw)
             if h:
                 return h, "pcf_url", post
+    # 先造訪官網頁面取得 session cookie(常見防爬蟲要求)
+    http_get("https://www.fhtrust.com.tw/ETF/trade_list")
+    time.sleep(REQ_DELAY)
+    snippet = ""
     d = datetime.now(TZ_TAIPEI)
     for _ in range(6):
         url = PCF_TEMPLATE.format(date=d.strftime("%Y/%m/%d"))
-        raw = http_get(url, referer="https://www.fhtrust.com.tw/ETF/trade_list")
+        raw = http_get(url, referer="https://www.fhtrust.com.tw/ETF/trade_list",
+                       xhr=True)
         time.sleep(REQ_DELAY)
         if raw:
             h, post = parse_fh_pcf(raw)
             if h:
                 return h, "fhtrust_api", post
+            if not snippet:
+                snippet = raw.strip()[:120]
+                print(f"[diag] 復華回應非預期格式: {snippet}")
         d -= timedelta(days=1)
+    if snippet:
+        LAST_HTTP_ERROR["msg"] = f"回應非JSON: {snippet}"
     return {}, "unavailable", None
 
 
